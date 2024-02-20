@@ -32,6 +32,7 @@ if __name__ == '__main__':
     err = 1.0
     tol = 1e-6
     eta = 0.9
+    tau = 1.5
     r_i = 1.0
     dim = len(X[0])
     # r : received; c : correction; p : prediction; l : lambda
@@ -66,11 +67,9 @@ if __name__ == '__main__':
         N_j[source] = message
     MPI.Request.Waitall(recv_requests)
     
-    # compute a_{ij} & rho_i
-    a_i = {j : 0.5 * eta / max(N_i, N_j[j]) for j in neighbors}
-    rho_i = 0.0
-    for j in neighbors:
-        rho_i += a_i[j]
+    # compute rho & a_{ij}
+    rho = np.sqrt(tau / (1.0 + tau))
+    a_i = {j : rho * 0.5 / max(N_i, N_j[j]) for j in neighbors}
     
     # PPCM
     t1 = time.time() # start time
@@ -87,7 +86,7 @@ if __name__ == '__main__':
             
             num_g = np.inner(d_g, d_g) # numerator
             den_w = np.inner(d_w, d_w) # denominator
-            mu = np.sqrt(2.0 * num_g / den_w)
+            mu = np.sqrt((tau + 1) * num_g / den_w)
             
             # self-tuning
             if mu > eta:
@@ -125,7 +124,7 @@ if __name__ == '__main__':
         for j in neighbors:
             w_p_sum += a_i[j] * (w_p - w_p_r[j])
         l_pre = l.copy()
-        s_i = (eta / rho_i * 0.5) ** 2 * r_i
+        s_i = eta ** 2 * r_i
         l = l - s_i * w_p_sum
         
         # exchange l
@@ -165,7 +164,6 @@ if __name__ == '__main__':
         
         # compute stepwise error
         err = max(np.linalg.norm((w_c - w_p) * np.sqrt(r_i), np.inf), np.linalg.norm((l - l_pre) / np.sqrt(s_i), np.inf))
-#       err = max(np.linalg.norm(w_c - w_p, np.inf), np.linalg.norm(l - l_pre, np.inf))
         if step % 100 == 0:
             print(f"stepwise L^inf error of node {id} at step {step} : {err}")
         
